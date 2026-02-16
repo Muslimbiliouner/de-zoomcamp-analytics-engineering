@@ -1,0 +1,17 @@
+# DuckDB
+*.duckdb
+
+# Data files
+data/
+
+# dbt build artifacts
+target/
+dbt_packages/
+logs/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
