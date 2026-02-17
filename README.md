@@ -116,7 +116,7 @@ dbt run --target prod
 
 `dbt run --select int_trips_unioned` builds:
 
-**stg_green_tripdata, stg_yellow_tripdata, and int_trips_unioned**
+**int_trips_unioned**
 
 ---
 
