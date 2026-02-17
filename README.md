@@ -1,180 +1,161 @@
-# Module 4 – Analytics Engineering with dbt
+# NYC Taxi Analytics Engineering with dbt + DuckDB
 
-This repository contains my solution for **Module 4 – Analytics Engineering** from the Data Engineering Zoomcamp.
+This project is part of **Data Engineering Zoomcamp – Module 4 (Analytics Engineering)**.
 
-## 📌 Project Overview
+It demonstrates how to transform raw NYC Taxi data (Green & Yellow 2019–2020) into analytics-ready models using:
 
-In this project, I used:
-
-- **dbt Core**
-- **DuckDB**
-- **Docker**
-- NYC Taxi dataset (Green & Yellow taxis 2019–2020)
-
-The goal is to transform raw trip data into analytics-ready models using modern ELT practices.
+- dbt Core
+- DuckDB
+- Docker
+- Parquet optimization
+- Production-style tuning
 
 ---
 
-## 🏗 Architecture
+# 🏗️ Architecture
 
-Raw Data (CSV.gz)  
-⬇  
-DuckDB (prod schema)  
-⬇  
-dbt Staging Models  
-⬇  
-Intermediate Models  
-⬇  
-Fact & Dimension Models  
-⬇  
-Monthly Revenue Aggregation
+```mermaid
+flowchart LR
 
----
-
-## 📂 Project Structure
-
+    A["Raw CSV Files\nGreen and Yellow Taxi"] --> B["DuckDB COPY"]
+    B --> C["Partitioned Parquet\nyear/month"]
+    C --> D["External Views\nread_parquet()"]
+    D --> E["dbt Staging Models"]
+    E --> F["Intermediate Models\nUnion and Deduplication"]
+    F --> G["Fact and Dimension Models"]
+    G --> H["Reporting Model\nfct_monthly_zone_revenue"]
 ```
 
-taxi_rides_ny/
-│
-├── models/
-│   ├── staging/
-│   ├── intermediate/
-│   └── marts/
-│
-├── seeds/
-├── macros/
-├── dbt_project.yml
-├── packages.yml
-└── README.md
+## ⚙️ Performance Optimization
 
+- Converted CSV → Partitioned Parquet
+- Limited DuckDB threads to 1
+- Configured memory and temp directory
+
+
+Large CSV files caused memory pressure and slow queries.
+
+To optimize:
+
+### 1️⃣ Convert CSV to Partitioned Parquet
+
+```sql
+COPY (
+    SELECT *,
+           year(lpep_pickup_datetime) AS year,
+           month(lpep_pickup_datetime) AS month
+    FROM read_csv_auto('data/green_tripdata_*.csv.gz')
+)
+TO 'data/parquet/green'
+(FORMAT PARQUET, PARTITION_BY (year, month), COMPRESSION ZSTD);
 ````
+
+Same process applied for Yellow taxi.
 
 ---
 
-## ⚙️ Setup Instructions
+### 2️⃣ Use External Parquet Views
 
-### 1️⃣ Run Docker Container
+```sql
+CREATE OR REPLACE VIEW prod.green_tripdata AS
+SELECT * FROM read_parquet('data/parquet/green/**/*.parquet');
+
+CREATE OR REPLACE VIEW prod.yellow_tripdata AS
+SELECT * FROM read_parquet('data/parquet/yellow/**/*.parquet');
+```
+
+---
+
+### 3️⃣ Memory & Thread Optimization (DuckDB)
+
+Before running heavy queries:
+
+```sql
+SET memory_limit='6GB';
+SET threads=1;
+SET preserve_insertion_order=false;
+```
+
+And run dbt with:
+
+```bash
+dbt run --target prod --threads 1
+```
+
+This prevents Out-of-Memory errors on machines with ~16GB RAM.
+
+---
+
+## 🧱 dbt Models
+
+* staging:
+
+  * stg_green_tripdata
+  * stg_yellow_tripdata
+
+* intermediate:
+
+  * int_trips_unioned
+  * int_trips (deduplicated)
+
+* marts:
+
+  * fct_trips
+  * dim_zones
+  * dim_vendors
+
+* reporting:
+
+  * fct_monthly_zone_revenue
+
+---
+
+## 📊 Homework Results
+
+| Question | Answer                            |
+| -------- | --------------------------------- |
+| Q1       | int_trips_unioned only            |
+| Q2       | dbt fails with non-zero exit code |
+| Q3       | 12,184                            |
+| Q4       | East Harlem North                 |
+| Q5       | 384,624                           |
+| Q6       | 43,244,693                        |
+
+---
+
+## 🚀 How to Run
+
+Start Docker:
 
 ```bash
 docker run -it \
   -v $(pwd)/taxi_rides_ny:/app/taxi_rides_ny \
   -v $(pwd)/profiles:/root/.dbt \
   dbt-zoomcamp
-````
+```
 
----
-
-### 2️⃣ Install Dependencies
+Inside container:
 
 ```bash
 dbt deps
-```
-
----
-
-### 3️⃣ Load Raw Taxi Data
-
-Inside DuckDB:
-
-```sql
-CREATE SCHEMA IF NOT EXISTS prod;
-
-CREATE OR REPLACE TABLE prod.green_tripdata AS
-SELECT * FROM read_csv_auto('data/green_tripdata_*.csv.gz');
-
-CREATE OR REPLACE TABLE prod.yellow_tripdata AS
-SELECT * FROM read_csv_auto('data/yellow_tripdata_*.csv.gz');
-```
-
----
-
-### 4️⃣ Run dbt Models
-
-```bash
 dbt seed --target prod
-dbt run --target prod
+dbt run --target prod --threads 1
 ```
 
 ---
 
-## 📊 Final Models Created
+## 💡 Key Learnings
 
-* `prod.stg_green_tripdata`
-* `prod.stg_yellow_tripdata`
-* `prod.int_trips`
-* `prod.fct_trips`
-* `prod.dim_zones`
-* `prod.dim_vendors`
-* `prod.fct_monthly_zone_revenue`
-
----
-
-## 📈 Homework Results
-
-### ✅ Q1
-
-`dbt run --select int_trips_unioned` builds:
-
-**int_trips_unioned**
+* How dbt lineage works (`--select`, `+model`)
+* Why Parquet is superior to CSV for analytics
+* How memory tuning affects analytical workloads
+* Handling large fact tables in DuckDB
+* Deduplication using window functions
+* Data quality testing with dbt
 
 ---
 
-### ✅ Q2
+## 👨‍💻 Author
 
-If payment_type = 6 appears:
-
-**dbt fails the test with a non-zero exit code**
-
----
-
-### ✅ Q3
-
-Count of records in `fct_monthly_zone_revenue`:
-
-**12,184**
-
----
-
-### ✅ Q4
-
-Highest Green taxi revenue zone in 2020:
-
-**East Harlem North**
-
----
-
-### ✅ Q5
-
-Total Green taxi trips in October 2019:
-
-**384,624**
-
----
-
-### ✅ Q6
-Count of records in `stg_fhv_tripdata` (2019, excluding NULL dispatching_base_num):
-
-**43,244,693**
-
----
-
-## 🧠 Key Learnings
-
-* dbt model materialization strategies (view vs incremental)
-* Surrogate key generation
-* Data quality testing
-* Model lineage and dependencies
-* Handling large datasets in DuckDB
-* Memory optimization for analytical workloads
-
----
-
-## 🔗 Course Reference
-
-Data Engineering Zoomcamp
-[https://github.com/DataTalksClub/data-engineering-zoomcamp](https://github.com/DataTalksClub/data-engineering-zoomcamp)
-
----
-
-🚀 Built as part of my journey toward becoming a Data Engineer.
+Rahmat Adi
+Data Engineering Zoomcamp 2026
