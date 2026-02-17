@@ -9,7 +9,7 @@ DATA_DIR.mkdir(exist_ok=True)
 con = duckdb.connect("taxi_rides_ny.duckdb")
 con.execute("CREATE SCHEMA IF NOT EXISTS prod")
 
-for taxi_type in ["yellow", "green"]:
+for taxi_type in ["green", "yellow"]:
     for year in [2019, 2020]:
         for month in range(1, 13):
             file = f"{taxi_type}_tripdata_{year}-{month:02d}.csv.gz"
@@ -29,5 +29,4 @@ for taxi_type in ["yellow", "green"]:
         SELECT * FROM read_csv_auto('data/{taxi_type}_tripdata_*.csv.gz')
     """)
 
-con.close()
 print("Done loading raw tables.")

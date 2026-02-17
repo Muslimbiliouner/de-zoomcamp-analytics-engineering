@@ -1,6 +1,7 @@
 -- Data mart for monthly revenue analysis by pickup zone and service type
 -- This aggregation is optimized for business reporting and dashboards
 -- Enables analysis of revenue trends across different zones and taxi types
+{{ config(materialized='table') }}
 
 select
     -- Grouping dimensions
