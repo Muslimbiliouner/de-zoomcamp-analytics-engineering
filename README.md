@@ -157,5 +157,5 @@ dbt run --target prod --threads 1
 
 ## 👨‍💻 Author
 
-Rahmat Adi
+Rahmatulloh
 Data Engineering Zoomcamp 2026
